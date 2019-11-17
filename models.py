@@ -3,7 +3,7 @@ import itertools
 from random import randint
 
 class Blackjack():
-    def __init__(self):
+    def __init__(self, n_episodes):
         # player_sum = np.array(range(12,22))
         # dealer_card = np.array(range(1,12))
         # player_usable_ace = np.array([0,1])
@@ -12,14 +12,20 @@ class Blackjack():
         # # state based on current sum (12-21), dealers's one-showing card (1-10), and whether hold usable ace (0,1)
         # possible_states = list(itertools.product(player_sum,dealer_card,player_usable_ace))
 
-        self.actions = [0,1] # 0: stick, 1: hit
-        self.player_policy = np.ones(22, dtype = np.int)
-        self.player_policy[20] = self.actions[0]
-        self.player_policy[21] = self.actions[0]
-        self.dealer_policy = np.ones(22, dtype=np.int)
-
+        actions = [0,1] # 0: stick, 1: hit
+        player_policy = np.ones(22, dtype = np.int)
+        player_policy[20] = actions[0]
+        player_policy[21] = actions[0]
+        dealer_policy = np.ones(22, dtype=np.int)
         for i in range(17,22):
-            self.dealer_policy[i] = 0
+            dealer_policy[i] = 0
+
+        self.n_episodes = n_episodes
+        # q value = value of state action pair
+        self.q_values = np.zeros((10, 10, 2, 2))
+        self.visits_counter = np.ones((10, 10, 2, 2))
+        self.player_policy = player_policy
+        self.dealer_policy = dealer_policy
 
     def deal_cards(self):
         player_card1 = randint(1,10)
@@ -43,6 +49,7 @@ class Blackjack():
             print(cards)
             cards, usable_ace = self.update_usable_ace(cards, usable_ace)
             count = sum(cards)
+
             if count > 21:
                 bust = True
                 break
@@ -99,3 +106,23 @@ class Blackjack():
         elif player_count < dealer_count:
             print("Dealer wins")
             return -1, player_trajectory
+
+    def monte_carlo_exploring_starts(self, n_episodes):
+        for i in range(n_episodes):
+            print("Episode: {}".format(i))
+
+            # random state initialization
+            player_cards, dealer_cards = self.deal_cards()
+            reward, player_trajectory = self.play(player_cards, dealer_cards)
+
+            for state_action_pair in player_trajectory:
+                state = state_action_pair["state"]
+                action = state_action_pair["action"]
+                # player always have sum between 12 to 21
+
+                player_count, dealer_card1, usable_ace = state[0], state[1], state[2]
+
+                self.q_values[player_count-12, dealer_card1-1, usable_ace, action] += reward
+                self.visits_counter[player_count-12, dealer_card1-1, usable_ace, action] +=1
+
+        return self.q_values/self.visits_counter
