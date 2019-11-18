@@ -13,19 +13,27 @@ class Blackjack():
         # possible_states = list(itertools.product(player_sum,dealer_card,player_usable_ace))
 
         actions = [0,1] # 0: stick, 1: hit
-        player_policy = np.ones(22, dtype = np.int)
-        player_policy[20] = actions[0]
-        player_policy[21] = actions[0]
+        # player_policy = np.ones(22, dtype = np.int)
+        # player_policy[20] = actions[0]
+        # player_policy[21] = actions[0]
+
+        player_policy = np.ones((10,10,2), dtype = np.int)
+        player_policy[21-12,:,:] = actions[0]
+        player_policy[20-12,:,:] = actions[0]
         dealer_policy = np.ones(22, dtype=np.int)
+
         for i in range(17,22):
             dealer_policy[i] = 0
 
         self.n_episodes = n_episodes
         # q value = value of state action pair
+
         self.q_values = np.zeros((10, 10, 2, 2))
-        self.visits_counter = np.ones((10, 10, 2, 2))
         self.player_policy = player_policy
         self.dealer_policy = dealer_policy
+        self.win_counter = 0
+        self.lose_counter = 0
+        self.draw_counter = 0
 
     def deal_cards(self):
         player_card1 = randint(1,10)
@@ -55,10 +63,12 @@ class Blackjack():
                 break
 
             # execute policy
-            action = policy[count]
-
             if agent == "player":
+                action = policy[sum(cards) - 12, dealer_card1-1, usable_ace]
                 player_trajectory.append({"state":(sum(cards), dealer_card1, usable_ace), "action":action})
+
+            else:
+                action = policy[count]
 
             if action == 0:
                 stick = True
@@ -89,6 +99,7 @@ class Blackjack():
 
         if player_bust:
             print("Player busted")
+            self.lose_counter+=1
             return -1, player_trajectory
 
         # dealer's turn
@@ -97,17 +108,28 @@ class Blackjack():
 
         if dealer_bust or (player_count > dealer_count):
             print("Player wins")
+            self.win_counter+=1
             return 1, player_trajectory
 
         elif player_count == dealer_count:
             print("Draw")
+            self.draw_counter+=1
             return 0, player_trajectory
 
         elif player_count < dealer_count:
             print("Dealer wins")
+            self.lose_counter+=1
             return -1, player_trajectory
 
+    # def policy_update(self, policy, q_values):
+    #
+    #
+
     def monte_carlo_exploring_starts(self, n_episodes):
+        accumulated_rewards = np.zeros((10, 10, 2, 2))
+        visits_counter = np.ones((10, 10, 2, 2))
+
+
         for i in range(n_episodes):
             print("Episode: {}".format(i))
 
@@ -119,10 +141,10 @@ class Blackjack():
                 state = state_action_pair["state"]
                 action = state_action_pair["action"]
                 # player always have sum between 12 to 21
-
                 player_count, dealer_card1, usable_ace = state[0], state[1], state[2]
+                accumulated_rewards[player_count-12, dealer_card1-1, usable_ace, action] += reward
+                visits_counter[player_count-12, dealer_card1-1, usable_ace, action] +=1
+                self.q_values = accumulated_rewards/visits_counter
+                self.player_policy[player_count-12, dealer_card1-1, usable_ace] = np.argmax(self.q_values[player_count-12, dealer_card1-1, usable_ace])
 
-                self.q_values[player_count-12, dealer_card1-1, usable_ace, action] += reward
-                self.visits_counter[player_count-12, dealer_card1-1, usable_ace, action] +=1
-
-        return self.q_values/self.visits_counter
+        print("Win: {}, Lose:{}, Draw:{}".format(self.win_counter, self.lose_counter, self.draw_counter))
